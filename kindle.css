@@ -1,0 +1,56 @@
+ /* Style Definitions */
+ 
+p {
+	text-indent: 0em;
+	margin-top: 0.5em;
+}
+
+li > p {
+    margin: 0 !important;
+}
+
+li {
+    margin: 0 !important;
+}
+
+img {
+    display: block;
+    margin-top: 0.5em;
+    margin-bottom: 0.5em;
+}
+
+pre {
+    margin: 0 !important;
+}
+
+figcaption {
+    display: block;
+    margin-bottom: 0.5em;
+    margin-top: 0.5em;
+}
+
+.pagebreak
+{
+	page-break-before: always;
+}
+
+.centered
+{
+	text-align: center;
+}
+
+.bottom
+{
+	vertical-align: text-bottom;
+}
+
+.tablehead
+{
+	text-align: center;
+	font-weight: bold;
+}
+
+H1 {margin-top: 1em; }
+H2 {margin-top: 1em; }
+H3 {margin-top: 1em; }
+H4 {margin-top: 1em; }
