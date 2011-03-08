@@ -5,10 +5,19 @@ import codecs
 import re
 from os import path, system, makedirs, remove, walk
 from shutil import copyfile, copytree, rmtree, move
+from sys import argv
 
 def main():
+    if len(argv) != 2:
+        print 'No docset specified.'
+        return
+    docset_path = argv[1]
+    if not path.isdir(docset_path):
+        print 'Error: Specified docset is not a directory.'
+        return
+    
     #docset_path = '/Library/Developer/Documentation/DocSets/com.apple.adc.documentation.AppleiOS4_2.iOSLibrary.docset'
-    docset_path = '/Developer/Documentation/DocSets/com.apple.adc.documentation.AppleSnowLeopard.CoreReference.docset'
+    #docset_path = '/Developer/Documentation/DocSets/com.apple.adc.documentation.AppleSnowLeopard.CoreReference.docset'
     
     print "Scanning docset for books..."
     valid_book_types = set(['Guide', 'Getting Started'])
