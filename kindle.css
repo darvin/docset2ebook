@@ -1,6 +1,7 @@
 p {
 	text-indent: 0em;
 	margin-top: 0.5em;
+	text-align: left;
 }
 
 li > p {
@@ -19,6 +20,7 @@ img {
 
 pre {
     margin: 0 !important;
+    font-size: x-small !important;
 }
 
 figcaption {
@@ -48,7 +50,7 @@ figcaption {
 	font-weight: bold;
 }
 
-H1 {margin-top: 1em; }
-H2 {margin-top: 1em; }
-H3 {margin-top: 1em; }
-H4 {margin-top: 1em; }
+h1, h2, h3, h4 {
+    margin-top: 1em;
+    text-align: left;
+}
