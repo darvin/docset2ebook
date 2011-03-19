@@ -77,6 +77,7 @@ def build_mobi(doc_path, stylesheet, work_dir, output_dir, kindlegen_command):
 
     rmtree(work_dir)
     copytree(doc_path, work_dir)
+    copyfile(path.join(path.split(argv[0])[0], 'cover.gif'), path.join(work_dir, 'cover.gif'))
 
     absolute_paths = [path.join(work_dir, doc_path) for doc_path in documents]
 
@@ -173,7 +174,7 @@ def gen_opf(book):
     opf += '</metadata>'
     
     opf += '<manifest>'
-    opf += '<item id="My_Cover" media-type="image/gif" href="../cover.gif" />'
+    opf += '<item id="My_Cover" media-type="image/gif" href="cover.gif" />'
     opf += '<item id="toc" media-type="application/xhtml+xml" href="toc.html" />'
     i = 1
     all_docs = document_paths(book)
