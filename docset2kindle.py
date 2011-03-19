@@ -3,42 +3,135 @@
 import json
 import codecs
 import re
-from os import path, system, makedirs, remove, walk
+from optparse import OptionParser
+from os import path, makedirs, remove, walk, getcwd
+from subprocess import call
 from shutil import copyfile, copytree, rmtree, move
+from tempfile import mkdtemp
 from sys import argv
 
 def main():
-    if len(argv) != 2:
-        print 'No docset specified.'
+    usage = "Usage: %prog [options] <Path to Docset>"
+    parser = OptionParser(usage=usage)
+    parser.add_option("-o", "--output", dest="output_dir",
+                      help="write generated mobi files to DIRECTORY. If not specified, mobi files are written to the current working directory. If the directory doesn't exist, it is created automatically.", metavar="DIRECTORY")
+    
+    (options, args) = parser.parse_args()
+    if len(args) == 0:
+        print "You did not specify a docset.\n"
+        parser.print_help()
         return
-    docset_path = argv[1]
+    elif len(args) > 1:
+        print 'Too many arguments.'
+        return
+    output_dir = options.output_dir
+    if output_dir is None:
+        output_dir = getcwd()
+    
+    docset_path = args[0]
+    
     if not path.isdir(docset_path):
-        print 'Error: Specified docset is not a directory.'
+        print 'Error: Docset is not a directory.'
         return
     
-    #docset_path = '/Library/Developer/Documentation/DocSets/com.apple.adc.documentation.AppleiOS4_2.iOSLibrary.docset'
-    #docset_path = '/Developer/Documentation/DocSets/com.apple.adc.documentation.AppleSnowLeopard.CoreReference.docset'
+    #If kindlegen is found in the script's directory, use that version, 
+    #otherwise check if kindlegen is in the PATH:
+    script_dir = path.split(argv[0])[0]
+    kindlegen_command = path.join(script_dir, 'kindlegen')
+    if not path.isfile(kindlegen_command):
+        kindlegen_installed = (call(['which', '-s', 'kindlegen']) == 0)
+        if kindlegen_installed:
+            kindlegen_command = 'kindlegen'
+        else:
+            print 'kindlegen not found. Please download the kindlegen commandline tool from\nhttp://www.amazon.com/gp/feature.html?ie=UTF8&docId=1000234621\nand place it in your PATH or the script\'s directory.'
+            return
     
-    print "Scanning docset for books..."
+    if not path.isdir(output_dir): makedirs(output_dir)
+    
+    print 'Scanning docset for books...'
     valid_book_types = set(['Guide', 'Getting Started'])
     book_paths_by_title = books(docset_path, valid_book_types)
     print len(book_paths_by_title), ' books found. Starting conversion...'
     
-    f = open('kindle.css', 'r')
+    f = open(path.join(script_dir, 'kindle.css'), 'r')
     stylesheet = f.read()
     f.close()
     
     for book_path in book_paths_by_title.values():
-        build_mobi(book_path, stylesheet)
+        temp_dir = mkdtemp()
+        build_mobi(book_path, stylesheet, temp_dir, output_dir, kindlegen_command)
+        rmtree(temp_dir)
+
+
+def build_mobi(doc_path, stylesheet, work_dir, output_dir, kindlegen_command):
+    """Builds a complete .mobi file from a book directory."""
+    
+    book_path = path.join(doc_path, 'book.json')
+    f = open(book_path, 'r')
+    book = json.loads(f.read())
+    book_title = book.get('title')
+    print '  ' + book_title
+    f.close()
+
+    documents = document_paths(book)
+
+    rmtree(work_dir)
+    copytree(doc_path, work_dir)
+
+    absolute_paths = [path.join(work_dir, doc_path) for doc_path in documents]
+
+    for absolute_path in absolute_paths:
+        try:
+            f = codecs.open(absolute_path, 'r', 'utf-8')
+            doc = f.read()
+            f.close()
+            cleaned_doc = clean_doc(doc, stylesheet)
+            f = codecs.open(absolute_path, 'w', 'utf-8')
+            f.write(cleaned_doc)
+            f.close()
+        except IOError, error:
+            print error
+            continue
+
+    html_toc = gen_html_toc(book)
+    toc_path = path.join(work_dir, 'toc.html')
+    f = codecs.open(toc_path, 'w', 'utf-8')
+    f.write(html_toc)
+    f.close()
+
+    ncx = gen_ncx(book)
+    ncx_path = path.join(work_dir, 'toc.ncx')
+    f = codecs.open(ncx_path, 'w', 'utf-8')
+    f.write(ncx)
+    f.close()
+
+    opf = gen_opf(book)
+    opf_path = path.join(work_dir, 'kindle.opf')
+    f = codecs.open(opf_path, 'w', 'utf_8')
+    f.write(opf)
+    f.close()
+
+    command = kindlegen_command + ' ' + path.join(work_dir, 'kindle.opf') + ' -o output.mobi > /dev/null'
+    call(command, shell=True)
+
+    filename = book_title.replace('/', '_') + '.mobi'
+    dest_path = path.join(output_dir, filename)
+    try:
+        move(path.join(work_dir, 'output.mobi'), dest_path)
+    except IOError, error:
+        print error
 
 
 def books(docset_path, valid_book_types):
+    """Returns a list of valid book directories in the specified docset bundle."""
+    
     doc_paths = list()
     for paths in walk(docset_path):
         filenames = paths[2]
         if 'book.json' in filenames:
             doc_paths.append(paths[0])
     doc_path_dict = dict()
+    
     for doc_path in doc_paths:
         book_path = path.join(doc_path, 'book.json')
         f = open(book_path, 'r')
@@ -52,6 +145,8 @@ def books(docset_path, valid_book_types):
 
 
 def get_book_type(book):
+    """Returns the type of the book (loaded from book.json)"""
+    
     book_assignments = book.get('assignments')
     book_type = None
     if book_assignments:
@@ -61,68 +156,9 @@ def get_book_type(book):
     return book_type
 
 
-def build_mobi(doc_path, stylesheet):
-    book_path = path.join(doc_path, 'book.json')
-    f = open(book_path, 'r')
-    book = json.loads(f.read())
-    book_title = book.get('title')
-    print '  ' + book_title
-    f.close()
-    
-    documents = document_paths(book)
-    
-    work_dir = 'temp'
-    if path.isdir(work_dir): rmtree(work_dir)
-    copytree(doc_path, work_dir)
-    
-    absolute_paths = [path.join(work_dir, doc_path) for doc_path in documents]
-    
-    for absolute_path in absolute_paths:
-        try:
-            f = codecs.open(absolute_path, 'r', 'utf-8')
-            doc = f.read()
-            f.close()
-            cleaned_doc = clean_doc(doc, stylesheet)
-            f = codecs.open(absolute_path, 'w', 'utf-8')
-            f.write(cleaned_doc)
-            f.close()
-        except IOError, error:
-            print error
-            continue
-    
-    html_toc = gen_html_toc(book)
-    toc_path = path.join(work_dir, 'toc.html')
-    f = codecs.open(toc_path, 'w', 'utf-8')
-    f.write(html_toc)
-    f.close()
-    
-    ncx = gen_ncx(book)
-    ncx_path = path.join(work_dir, 'toc.ncx')
-    f = codecs.open(ncx_path, 'w', 'utf-8')
-    f.write(ncx)
-    f.close()
-    
-    opf = gen_opf(book)
-    opf_path = path.join(work_dir, 'kindle.opf')
-    f = codecs.open(opf_path, 'w', 'utf_8')
-    f.write(opf)
-    f.close()
-    
-    kindlegen_cmd = './kindlegen' + ' temp/kindle.opf -o output.mobi > /dev/null'
-    system(kindlegen_cmd)
-    
-    if not path.isdir('output'): makedirs('output')
-    
-    filename = book_title.replace('/', '_') + '.mobi'
-    dest_path = path.join('output', filename)
-    try:
-        move('temp/output.mobi', dest_path)
-        rmtree('temp')
-    except IOError, error:
-        print error
-
-
 def gen_opf(book):
+    """Generates an OPF file that contains the table of contents from a book (loaded from book.json)."""
+    
     title = book.get('title')
     
     opf = '''<?xml version="1.0" encoding="utf-8"?>
@@ -165,6 +201,8 @@ def gen_opf(book):
     
     
 def gen_ncx(book):
+    """Generates an NCX file with the logical table of contents (jump markers) from a book (loaded from book.json)."""
+    
     header = '''<?xml version="1.0" encoding="UTF-8"?>
         <!DOCTYPE ncx PUBLIC "-//NISO//DTD ncx 2005-1//EN"
     	"http://www.daisy.org/z3986/2005/ncx-2005-1.dtd">
@@ -180,7 +218,10 @@ def gen_ncx(book):
     ncx = header + navmap + footer
     return ncx
 
+
 def gen_nav_map(book):
+    """Generates a navigation map (part of the NCX file) from a book (loaded from book.json)."""
+    
     sections = book.get('sections')
     navmap = ''
     navmap += '<navPoint class="chapter" id="chapter_0" playOrder="0"><navLabel><text>Table of Contents</text></navLabel><content src="toc.html"/></navPoint>'
@@ -195,7 +236,10 @@ def gen_nav_map(book):
         order += 1
     return navmap
 
+
 def gen_html_toc(book):
+    """Generates an HTML table of contents from a book (loaded from book.json)."""
+    
     toc = html_toc_fragment(book)
     book_title = book.get('title')
     header = '''<html><head>
@@ -207,6 +251,8 @@ def gen_html_toc(book):
 
 
 def html_toc_fragment(book):
+    """Recursively creates a nested list for the HTML table of contents (used by gen_html_toc)."""
+    
     sections = book['sections']
     toc = '<ul>'
     for section in sections:
@@ -220,6 +266,8 @@ def html_toc_fragment(book):
 
 
 def clean_doc(doc, stylesheet):
+    """Prepares an HTML document from a docset for use in mobi (removes javascript, modifies CSS, etc.)."""
+    
     head_pattern = re.compile(r'(<meta id=.*)</head>', re.DOTALL)
     cleaned_doc = re.sub(head_pattern, '<style>' + stylesheet + '</style></head>', doc)
     feedback_pattern = re.compile(r'<div id="feedbackForm.*</div>', re.DOTALL)
@@ -235,6 +283,8 @@ def clean_doc(doc, stylesheet):
     
     
 def document_paths(book):
+    """Returns a list of unique document paths that are present in a book (loaded from book.json)."""
+    
     sections = book.get('sections')
     if sections is None: return []
     docs_set = set()
