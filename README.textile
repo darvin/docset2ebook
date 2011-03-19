@@ -10,7 +10,7 @@ This is a Python script to convert Apple's developer documentation to the Kindle
 * Place the "kindlegen":http://www.amazon.com/gp/feature.html?ie=UTF8&docId=1000234621 binary in the script's directory or somewhere in your $PATH.
 * @> python docset2kindle.py "path/to/docset" -o output_directory@
 * This will extract all documents of type 'Guide' or 'Getting Started' from the specified docset and put Kindle versions in the output directory (documentation for individual classes etc. is not included). The conversion may take a couple of minutes. The docset for iOS contains about 140 books, the one for Mac OS X about 340.
-* It's also possible to specify a directory that contains multiple docsets.
+* It's also possible to specify a directory that contains multiple docsets (e.g. /Developer/Documentation/DocSets), but as the output file names are determined by the book titles, it is possible that a book in one of the docsets overwrites a book with the same title in another docset.
 
 *Known Issues:*
 * Lists (ul, ol) don't look quite right (there's too much vertical space after the bullet point)
