@@ -109,7 +109,7 @@ def  draw_book_title(file_path, book_title):
         draw.text((margin, offset), line, font=font)
         offset += font.getsize(line)[1]
     
-    img.save(book_title+".png")
+    img.save(file_path)
 
 
 def build_pre(doc_path, stylesheet, work_dir, output_dir):
