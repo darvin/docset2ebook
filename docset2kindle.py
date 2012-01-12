@@ -15,6 +15,8 @@ def main():
     parser = OptionParser(usage=usage)
     parser.add_option("-o", "--output", dest="output_dir",
                       help="write generated mobi files to DIRECTORY. If not specified, mobi files are written to the current working directory. If the directory doesn't exist, it is created automatically.", metavar="DIRECTORY")
+                      
+    parser.add_option("-f", "--format", dest="format", default="mobi", help="output format. Currently supported mobi and epub", metavar="FORMAT")
     
     (options, args) = parser.parse_args()
     if len(args) == 0:
@@ -34,17 +36,20 @@ def main():
         print 'Error: Docset is not a directory.'
         return
     
-    #If kindlegen is found in the script's directory, use that version, 
-    #otherwise check if kindlegen is in the PATH:
+    
+    
     script_dir = path.split(argv[0])[0]
-    kindlegen_command = path.join(script_dir, 'kindlegen')
-    if not path.isfile(kindlegen_command):
-        kindlegen_installed = (call(['which', '-s', 'kindlegen']) == 0)
-        if kindlegen_installed:
-            kindlegen_command = 'kindlegen'
-        else:
-            print 'kindlegen not found. Please download the kindlegen commandline tool from\nhttp://www.amazon.com/gp/feature.html?ie=UTF8&docId=1000234621\nand place it in your PATH or the script\'s directory.'
-            return
+    if options.format=="mobi":
+        #If kindlegen is found in the script's directory, use that version, 
+        #otherwise check if kindlegen is in the PATH:
+        kindlegen_command = path.join(script_dir, './kindlegen')
+        if not path.isfile(kindlegen_command):
+            kindlegen_installed = (call(['which', '-s', 'kindlegen']) == 0)
+            if kindlegen_installed:
+                kindlegen_command = 'kindlegen'
+            else:
+                print 'kindlegen not found. Please download the kindlegen commandline tool from\nhttp://www.amazon.com/gp/feature.html?ie=UTF8&docId=1000234621\nand place it in your PATH or the script\'s directory.'
+                return
     
     if not path.isdir(output_dir): makedirs(output_dir)
     
@@ -57,14 +62,20 @@ def main():
     stylesheet = f.read()
     f.close()
     
+    
+    
     for book_path in book_paths_by_title.values():
         temp_dir = mkdtemp()
-        build_mobi(book_path, stylesheet, temp_dir, output_dir, kindlegen_command)
+        book_title = build_pre(book_path, stylesheet, temp_dir, output_dir)
+
+        if options.format=="mobi":
+            build_mobi(book_title,temp_dir, output_dir, kindlegen_command)
+        elif options.format=="epub":
+            build_epub(book_title,temp_dir, output_dir)
         rmtree(temp_dir)
 
 
-def build_mobi(doc_path, stylesheet, work_dir, output_dir, kindlegen_command):
-    """Builds a complete .mobi file from a book directory."""
+def build_pre(doc_path, stylesheet, work_dir, output_dir):
     
     book_path = path.join(doc_path, 'book.json')
     f = open(book_path, 'r')
@@ -107,12 +118,16 @@ def build_mobi(doc_path, stylesheet, work_dir, output_dir, kindlegen_command):
     f.close()
 
     opf = gen_opf(book)
-    opf_path = path.join(work_dir, 'kindle.opf')
+    opf_path = path.join(work_dir, 'content.opf')
     f = codecs.open(opf_path, 'w', 'utf_8')
     f.write(opf)
     f.close()
+    
+    return book_title
 
-    command = kindlegen_command + ' ' + path.join(work_dir, 'kindle.opf') + ' -o output.mobi > /dev/null'
+def build_mobi(book_title, work_dir, output_dir,kindlegen_command):
+    """Builds a complete .mobi file from a book directory."""
+    command = kindlegen_command + ' ' + path.join(work_dir, 'content.opf') + ' -o output.mobi > /dev/null'
     call(command, shell=True)
 
     filename = book_title.replace('/', '_') + '.mobi'
@@ -121,6 +136,44 @@ def build_mobi(doc_path, stylesheet, work_dir, output_dir, kindlegen_command):
         move(path.join(work_dir, 'output.mobi'), dest_path)
     except IOError, error:
         print error
+        
+        
+import zipfile
+    
+        
+def build_epub(book_title, work_dir, output_dir):
+    """Builds a complete .epub file from a book directory."""
+
+
+
+    filename = book_title.replace('/', '_') + '.epub'
+    dest_path = path.join(output_dir, filename)
+    
+
+
+    epub = zipfile.ZipFile(dest_path, 'w', compression=zipfile.ZIP_DEFLATED)
+    epub.writestr("mimetype", "application/epub+zip")
+    epub.writestr("META-INF/container.xml", '''<container version="1.0"
+           xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>''');
+    
+    
+    
+    root_len = len(path.abspath(work_dir))
+    for root, dirs, files in walk(work_dir):
+        archive_root = path.abspath(root)[root_len:]
+        for f in files:
+            fullpath = path.join(root, f)
+            archive_name = path.join(archive_root, f)
+            epub.write(fullpath, "OEBPS/"+ archive_name, zipfile.ZIP_DEFLATED)
+    
+    
+    
+    epub.close()
+
 
 
 def books(docset_path, valid_book_types):
@@ -135,13 +188,16 @@ def books(docset_path, valid_book_types):
     
     for doc_path in doc_paths:
         book_path = path.join(doc_path, 'book.json')
-        f = open(book_path, 'r')
-        book = json.loads(f.read())
-        book_type = get_book_type(book)
-        book_title = book.get('title')
-        f.close()
-        if len(valid_book_types) == 0 or book_type in valid_book_types:
-            doc_path_dict[book_title] = doc_path
+        try:
+            f = open(book_path, 'r')
+            book = json.loads(f.read())
+            book_type = get_book_type(book)
+            book_title = book.get('title')
+            f.close()
+            if len(valid_book_types) == 0 or book_type in valid_book_types:
+                doc_path_dict[book_title] = doc_path
+        except ValueError:
+            pass
     return doc_path_dict
 
 
