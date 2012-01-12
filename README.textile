@@ -19,4 +19,5 @@ This is a Python script to convert Apple's developer documentation to the Kindle
 * Links across books don't work (I'm not sure if this is even possible with Kindle books)
 * Newest Apple docsets not supported. Newest supported docsets are:
 * http://devimages.apple.com/docsets/20110720/com.apple.adc.documentation.AppleiOS4_3.iOSLibrary.xar
+* Snow Leopard Library Documentation (install from XCode)
 
