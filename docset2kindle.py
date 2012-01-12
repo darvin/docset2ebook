@@ -39,6 +39,13 @@ def main():
     
     
     script_dir = path.split(argv[0])[0]
+    
+    
+    try:
+        import PIL
+    except ImportError:
+        print "PIL is not installed. Continue without dynamic cover support"
+    
     if options.format=="mobi":
         #If kindlegen is found in the script's directory, use that version, 
         #otherwise check if kindlegen is in the PATH:
@@ -74,13 +81,43 @@ def main():
             build_epub(book_title,temp_dir, output_dir)
         rmtree(temp_dir)
 
+def  draw_book_title(file_path, book_title):
+
+    import PIL
+    from PIL import ImageFont
+    from PIL import Image
+    from PIL import ImageDraw
+    import textwrap
+    
+    img=Image.open(file_path)
+    draw = ImageDraw.Draw(img)
+    
+    offset = 315
+    margin = 41
+    
+    wrapped_text = textwrap.wrap(book_title, width=12, break_long_words=False, break_on_hyphens=False)
+    if len(wrapped_text)>3:
+        wrapped_text = textwrap.wrap(book_title, width=16, break_long_words=False, break_on_hyphens=False)
+        font_size = 69
+    else:
+        font_size = 81
+    
+    
+    font = ImageFont.truetype("/Library/Fonts/Arial Narrow Bold.ttf", font_size)
+
+    for line in wrapped_text:
+        draw.text((margin, offset), line, font=font)
+        offset += font.getsize(line)[1]
+    
+    img.save(book_title+".png")
+
 
 def build_pre(doc_path, stylesheet, work_dir, output_dir):
     
     book_path = path.join(doc_path, 'book.json')
     f = open(book_path, 'r')
     book = json.loads(f.read())
-    book_title = book.get('title')
+    book_title = book.get('title').lstrip().rstrip()
     print '  ' + book_title
     f.close()
 
@@ -90,6 +127,12 @@ def build_pre(doc_path, stylesheet, work_dir, output_dir):
     copytree(doc_path, work_dir)
     copyfile(path.join(path.split(argv[0])[0], 'cover.gif'), path.join(work_dir, 'cover.gif'))
 
+
+    try:
+        draw_book_title(path.join(work_dir, 'cover.gif'), book_title)
+    except ImportError:
+        pass
+        
     absolute_paths = [path.join(work_dir, doc_path) for doc_path in documents]
 
     for absolute_path in absolute_paths:
