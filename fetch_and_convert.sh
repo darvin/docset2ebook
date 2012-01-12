@@ -1,7 +1,7 @@
 ##!/bin/sh
 FORMAT=epub
 OUTPUT_DIR=~/Documents/ADCBooks
-COMMAND=python docset2kindle.py
+COMMAND="python docset2kindle.py"
 mkdir $OUTPUT_DIR
 
 $COMMAND /Developer/Documentation/DocSets -o $OUTPUT_DIR/XCode -f $FORMAT
